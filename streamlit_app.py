@@ -149,7 +149,7 @@ if tab == "Dashboard":
     with col1:
         st.metric("Current Month Income",f"₹{current_month_income:.2f}",f"{income_change:.2f}%" if income_change >= 0 else f"-{abs(income_change):.2f}%",delta_color="normal")  # Shows green for positive, red for negative)
     with col2:
-        st.metric("Current Month Expense",f"₹{current_month_expense:.2f}",f"{expense_change:.2f}%" if expense_change >= 0 else f"-{abs(expense_change):.2f}%",delta_color="inverse")
+        st.metric("Current Month Expense",f"₹{current_month_expense:.2f}",f"{expense_change:.2f}%" if expense_change > 0 else f"-{abs(expense_change):.2f}%",delta_color="inverse")
     with col3:
         st.metric("Total Income", f"₹{total_income:.2f}")
     with col4:
