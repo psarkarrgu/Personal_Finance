@@ -67,13 +67,32 @@ def add_fixed_transactions():
     save_data(df, data_file)
 
 # Function to reset data
+def reset_data():
+    st.sidebar.subheader("Reset Data")
+    if st.sidebar.button("Reset Data"):
+        confirmation_word = generate_confirmation_word()
+        user_input = st.sidebar.text_input("Type the following word to confirm: {}".format(confirmation_word))
 
+        if user_input == confirmation_word:
+            # Reset all data
+            try:
+                os.remove(data_file)
+                st.write(f"{data_file} has been removed successfully.")
+            except FileNotFoundError:
+                st.sidebar.warning(f"{data_file} does not exist.")
+            except Exception as e:
+                st.sidebar.warning(f"An error occurred: {e}")
+            #df = pd.DataFrame(columns=['Type', 'Amount', 'Date', 'Description', 'Category', 'Fixed'])
+            #save_data(df, data_file)
+            st.sidebar.success("Data reset successfully!")
+        else:
+            st.sidebar.warning("Confirmation word incorrect. Data not reset.")
 
 # Call the function to add fixed transactions
 add_fixed_transactions()
 
 # Call the function to reset data
-#reset_data()
+reset_data()
 
 # Tabs for navigation
 tab = st.sidebar.radio("Go to", ["Dashboard", "Manage Categories", "Manage Fixed Transactions","View or Add Records"], key="tab")
