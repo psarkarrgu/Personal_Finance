@@ -62,6 +62,7 @@ def login():
             hashed_pw = hash_password(password)
             users_df = pd.read_csv("data/users.csv", header=None, names=["username","full_name", "hashed_pw"])
             if any((users_df["username"] == username) & (users_df["hashed_pw"] == hashed_pw)):
+                full_name = users_df["full_name"]
                 st.session_state.authenticated = True
                 st.session_state.username = username
                 st.session_state.full_name = full_name
@@ -78,6 +79,7 @@ def app():
     if is_authenticated():      
         # Load data
         Logged_username = st.session_state.username
+        #st.write(Logged_username)
         def load_data(file, columns):
             if os.path.exists(file):
                 return pd.read_csv(file)
@@ -157,7 +159,9 @@ def app():
         tab = st.sidebar.radio("Go to", ["Dashboard", "Manage Categories", "Manage Fixed Transactions","View or Add Records"], key="tab")
         reset_data()
         if tab == "Dashboard":
-            st.title(f"Welcome, {st.session_state.full_name}")
+            
+            Logged_username = st.session_state.username
+            st.title(f"Welcome, {Logged_username}")
             
             # Month and year selectors
             month_selector = st.sidebar.selectbox("Month", ["Select a Month","January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"])
