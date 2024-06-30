@@ -92,7 +92,7 @@ def reset_data():
 add_fixed_transactions()
 
 # Call the function to reset data
-reset_data()
+#reset_data()
 
 # Tabs for navigation
 tab = st.sidebar.radio("Go to", ["Dashboard", "Manage Categories", "Manage Fixed Transactions","View or Add Records"], key="tab")
