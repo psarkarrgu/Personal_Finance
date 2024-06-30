@@ -60,10 +60,11 @@ def login():
     if st.button("Login"):
         if username and password:
             hashed_pw = hash_password(password)
-            users_df = pd.read_csv("data/users.csv", header=None, names=["username", "password"])
-            if any((users_df["username"] == username) & (users_df["password"] == hashed_pw)):
+            users_df = pd.read_csv("data/users.csv", header=None, names=["username","full_name", "hashed_pw"])
+            if any((users_df["username"] == username) & (users_df["hashed_pw"] == hashed_pw)):
                 st.session_state.authenticated = True
                 st.session_state.username = username
+                st.session_state.full_name = full_name
                 st.success("Logged in successfully!")
             else:
                 st.error("Invalid credentials")
