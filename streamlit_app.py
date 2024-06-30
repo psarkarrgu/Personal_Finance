@@ -1,151 +1,247 @@
 import streamlit as st
 import pandas as pd
-import math
-from pathlib import Path
+import datetime
+import os
+import random
+import string
 
 # Set the title and favicon that appear in the Browser's tab bar.
 st.set_page_config(
-    page_title='GDP dashboard',
-    page_icon=':earth_americas:', # This is an emoji shortcode. Could be a URL too.
+    page_title='Personal Finance',
+    page_icon='🪙', # This is an emoji shortcode. Could be a URL too.
 )
 
-# -----------------------------------------------------------------------------
-# Declare some useful functions.
+# File paths
+data_file = 'data/finance_data.csv'
+categories_file = 'data/categories.csv'
+fixed_file = 'data/fixed_transactions.csv'
 
-@st.cache_data
-def get_gdp_data():
-    """Grab GDP data from a CSV file.
+# Load data
+def load_data(file, columns):
+    if os.path.exists(file):
+        return pd.read_csv(file)
+    else:
+        return pd.DataFrame(columns=columns)
 
-    This uses caching to avoid having to read the file every time. If we were
-    reading from an HTTP endpoint instead of a file, it's a good idea to set
-    a maximum age to the cache with the TTL argument: @st.cache_data(ttl='1d')
-    """
+# Save data
+def save_data(df, file):
+    df.to_csv(file, index=False)
 
-    # Instead of a CSV on disk, you could read from an HTTP endpoint here too.
-    DATA_FILENAME = Path(__file__).parent/'data/gdp_data.csv'
-    raw_gdp_df = pd.read_csv(DATA_FILENAME)
+# Initialize data
+df = load_data(data_file, ['Type', 'Amount', 'Date', 'Description', 'Category', 'Fixed'])
+categories = load_data(categories_file, ['Category', 'Type'])
+fixed_transactions = load_data(fixed_file, ['Type', 'Amount', 'Description', 'Category', 'Start Date', 'End Date', 'Frequency'])
 
-    MIN_YEAR = 1960
-    MAX_YEAR = 2022
+# Function to generate random confirmation word
+def generate_confirmation_word():
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=8))
 
-    # The data above has columns like:
-    # - Country Name
-    # - Country Code
-    # - [Stuff I don't care about]
-    # - GDP for 1960
-    # - GDP for 1961
-    # - GDP for 1962
-    # - ...
-    # - GDP for 2022
-    #
-    # ...but I want this instead:
-    # - Country Name
-    # - Country Code
-    # - Year
-    # - GDP
-    #
-    # So let's pivot all those year-columns into two: Year and GDP
-    gdp_df = raw_gdp_df.melt(
-        ['Country Code'],
-        [str(x) for x in range(MIN_YEAR, MAX_YEAR + 1)],
-        'Year',
-        'GDP',
-    )
+# Function to add fixed transactions
+def add_fixed_transactions():
+    global df
+    today = pd.Timestamp(datetime.date.today())
+    
+    for index, row in fixed_transactions.iterrows():
+        start_date = pd.Timestamp(row['Start Date'])
+        end_date = row['End Date'] 
+        if end_date is not None:
+            end_date = pd.Timestamp(end_date)
+        frequency = row['Frequency']
 
-    # Convert years from string to integers
-    gdp_df['Year'] = pd.to_numeric(gdp_df['Year'])
+        while start_date <= today and (end_date is None or start_date <= end_date):
+            if start_date not in df['Date'].values:
+                new_entry = pd.DataFrame({
+                    'Type': [row['Type']],
+                    'Amount': [row['Amount']],
+                    'Date': [start_date.date()],  # Ensure start_date is a date object
+                    'Description': [row['Description']],
+                    'Category': [row['Category']],
+                    'Fixed': [True]
+                })
+                df = pd.concat([df, new_entry], ignore_index=True)
 
-    return gdp_df
+            # Increment start_date based on frequency
+            if frequency == "Daily":
+                start_date += pd.DateOffset(days=1)
+            elif frequency == "Weekly":
+                start_date += pd.DateOffset(weeks=1)
+            elif frequency == "Monthly":
+                start_date += pd.DateOffset(months=1)
+            elif frequency == "Yearly":
+                start_date += pd.DateOffset(years=1)
 
-gdp_df = get_gdp_data()
+    save_data(df, data_file)
 
-# -----------------------------------------------------------------------------
-# Draw the actual page
+# Function to reset data
+def reset_data():
+    st.sidebar.subheader("Reset Data")
+    if st.sidebar.button("Reset Data"):
+        confirmation_word = generate_confirmation_word()
+        user_input = st.sidebar.text_input("Type the following word to confirm: {}".format(confirmation_word))
 
-# Set the title that appears at the top of the page.
-'''
-# :earth_americas: GDP dashboard
+        if user_input == confirmation_word:
+            # Reset all data
+            df = pd.DataFrame(columns=['Type', 'Amount', 'Date', 'Description', 'Category', 'Fixed'])
+            save_data(df, data_file)
+            st.sidebar.success("Data reset successfully!")
+        elif user_input!= "":
+            st.sidebar.warning("Confirmation word incorrect. Data not reset.")
 
-Browse GDP data from the [World Bank Open Data](https://data.worldbank.org/) website. As you'll
-notice, the data only goes to 2022 right now, and datapoints for certain years are often missing.
-But it's otherwise a great (and did I mention _free_?) source of data.
-'''
+# Call the function to add fixed transactions
+add_fixed_transactions()
 
-# Add some spacing
-''
-''
+# Call the function to reset data
+reset_data()
 
-min_value = gdp_df['Year'].min()
-max_value = gdp_df['Year'].max()
+# Tabs for navigation
+tab = st.sidebar.radio("Go to", ["Dashboard", "Manage Categories", "Manage Fixed Transactions","View or Add Records"], key="tab")
 
-from_year, to_year = st.slider(
-    'Which years are you interested in?',
-    min_value=min_value,
-    max_value=max_value,
-    value=[min_value, max_value])
+if tab == "Dashboard":
+    st.title("Finance Dashboard")
+    
+    # Month and year selectors
+    month_selector = st.sidebar.selectbox("Month", ["Select a Month","January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"])
+    year_selector = st.sidebar.slider("Year", 2020, 2030, datetime.date.today().year)  # default to current year
+    
+    # Calculate current month income and expense
+    transactions = df.copy()  # Create a copy of df to avoid modifying the original dataframe
+    transactions['Date'] = pd.to_datetime(transactions['Date'])
+    if month_selector == 'Select a Month':
+        current_month = datetime.datetime.strptime(datetime.date.today().strftime("%B"), "%B").month
+        month_in_string = datetime.date.today().strftime("%B")
+    else:
+        current_month = datetime.datetime.strptime(month_selector, "%B").month
+        month_in_string = month_selector
+    
+    current_year = year_selector
+    current_month_income = transactions[(transactions['Date'].dt.month == current_month) & (transactions['Date'].dt.year == current_year) & (transactions['Type'] == 'Income')]['Amount'].sum()
+    current_month_expense = transactions[(transactions['Date'].dt.month == current_month) & (transactions['Date'].dt.year == current_year) & (transactions['Type'] == 'Expense')]['Amount'].sum()
+    
+    # Calculate last month income and expense
+    last_month = ((current_month - 1) % 12 +1) -1
+    #st.write("last_month",last_month)
+    last_month_year = current_year - 1 if last_month == 12 else current_year
+    #st.write("last_month_year",last_month_year)
+    last_month_income = transactions[(transactions['Date'].dt.month == last_month) & (transactions['Date'].dt.year == last_month_year) & (transactions['Type'] == 'Income')]['Amount'].sum()
+    #st.write("last_month_income",last_month_income)
+    last_month_expense = transactions[(transactions['Date'].dt.month == last_month) & (transactions['Date'].dt.year == last_month_year) & (transactions['Type'] == 'Expense')]['Amount'].sum()
+    #st.write("last_month_expense",last_month_expense)
 
-countries = gdp_df['Country Code'].unique()
+   # Calculate percentage change from last month
+    if last_month_income != 0:
+        income_change = ((current_month_income - last_month_income) / last_month_income) * 100
+    else:
+        income_change = 0
 
-if not len(countries):
-    st.warning("Select at least one country")
+    if last_month_expense != 0:
+        expense_change = ((current_month_expense - last_month_expense) / last_month_expense) * 100
+        
+    else:
+        expense_change = 0
 
-selected_countries = st.multiselect(
-    'Which countries would you like to view?',
-    countries,
-    ['DEU', 'FRA', 'GBR', 'BRA', 'MEX', 'JPN'])
+    # Calculate total income and expense
+    total_income = transactions[transactions['Type'] == 'Income']['Amount'].sum()
+    total_expense = transactions[transactions['Type'] == 'Expense']['Amount'].sum()
 
-''
-''
-''
+    # Create KPIs
+    st.header(f"KPIs for {month_in_string}")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Current Month Income",f"₹{current_month_income:.2f}",f"{income_change:.2f}%" if income_change >= 0 else f"-{abs(income_change):.2f}%",delta_color="normal")  # Shows green for positive, red for negative)
+    with col2:
+        st.metric("Current Month Expense",f"₹{current_month_expense:.2f}",f"{expense_change:.2f}%" if expense_change >= 0 else f"-{abs(expense_change):.2f}%",delta_color="inverse")
+    with col3:
+        st.metric("Total Income", f"₹{total_income:.2f}")
+    with col4:
+        st.metric("Total Expense", f"₹{total_expense:.2f}")
+    
+    
 
-# Filter the data
-filtered_gdp_df = gdp_df[
-    (gdp_df['Country Code'].isin(selected_countries))
-    & (gdp_df['Year'] <= to_year)
-    & (from_year <= gdp_df['Year'])
-]
-
-st.header('GDP over time', divider='gray')
-
-''
-
-st.line_chart(
-    filtered_gdp_df,
-    x='Year',
-    y='GDP',
-    color='Country Code',
-)
-
-''
-''
-
-
-first_year = gdp_df[gdp_df['Year'] == from_year]
-last_year = gdp_df[gdp_df['Year'] == to_year]
-
-st.header(f'GDP in {to_year}', divider='gray')
-
-''
-
-cols = st.columns(4)
-
-for i, country in enumerate(selected_countries):
-    col = cols[i % len(cols)]
-
-    with col:
-        first_gdp = first_year[gdp_df['Country Code'] == country]['GDP'].iat[0] / 1000000000
-        last_gdp = last_year[gdp_df['Country Code'] == country]['GDP'].iat[0] / 1000000000
-
-        if math.isnan(first_gdp):
-            growth = 'n/a'
-            delta_color = 'off'
+elif tab == "View or Add Records":
+    st.title("Finance Dashboard")
+    transaction_type = st.sidebar.radio("Type", ["Expense", "Income"], key="transaction_type")
+    filtered_categories = categories[categories['Type'] == transaction_type]['Category'].tolist()
+    category = st.sidebar.selectbox("Category", ["Select a category"] + filtered_categories, key="category")
+    amount = st.sidebar.number_input("Amount", min_value=0.0, format="%.2f", key="amount",step=1.0)
+    date = st.sidebar.date_input("Date", datetime.date.today(), key="date")
+    #date = datetime.date(st.sidebar.date_input("Date", datetime.date.today()).year, st.sidebar.date_input("Date", datetime.date.today()).month, st.sidebar.date_input("Date", datetime.date.today()).day, key="date")
+    description = st.sidebar.text_input("Description", key="description")
+    if st.sidebar.button("Add Entry", key="add_entry"):
+        if amount == 0:
+            st.sidebar.warning("Amount must be greater than 0.")
+        elif category == "Select a category":
+            st.sidebar.warning("Please select a category.")
         else:
-            growth = f'{last_gdp / first_gdp:,.2f}x'
-            delta_color = 'normal'
+            new_entry = pd.DataFrame({
+                'Type': [transaction_type],
+                'Amount': [amount],
+                'Date': [date],
+                'Description': [description],
+                'Category': [category],
+                'Fixed': [False]
+            })
+            df = pd.concat([df, new_entry], ignore_index=True)
+            save_data(df, data_file)
+            st.sidebar.success("Entry added successfully!")
+    st.write("### Current Data")
+    st.dataframe(df,use_container_width=True)
+elif tab == "Manage Categories":
+    st.title("Manage Categories")
+    new_category = st.text_input("Add new category", key="new_category")
+    category_type = st.selectbox("Category Type", ["Expense", "Income"], key="category_type")
 
-        st.metric(
-            label=f'{country} GDP',
-            value=f'{last_gdp:,.0f}B',
-            delta=growth,
-            delta_color=delta_color
-        )
+    if st.button("Add Category", key="add_category"):
+        if new_category and new_category not in categories['Category'].values:
+            new_cat_entry = pd.DataFrame({'Category': [new_category], 'Type': [category_type]})
+            categories = pd.concat([categories, new_cat_entry], ignore_index=True)
+            save_data(categories, categories_file)
+            st.success("Category added successfully!")
+        elif new_category in categories['Category'].values:
+            st.warning("Category already exists.")
+
+    if st.button("Delete Selected Categories", key="delete_categories"):
+        selected_categories = st.multiselect("Select categories to delete", categories['Category'].tolist(), key="selected_categories")
+        categories = categories[~categories['Category'].isin(selected_categories)]  # Use boolean indexing to delete rows
+        save_data(categories, categories_file)
+        st.success("Selected categories deleted successfully.")
+
+    st.write("### Current Categories")
+    st.dataframe(categories)
+
+elif tab == "Manage Fixed Transactions":
+    st.title("Manage Fixed Income/Expenses")
+    fixed_type = st.selectbox("Type", ["Expense", "Income"], key="fixed_type")
+    fixed_category = st.selectbox("Category", categories[categories['Type'] == fixed_type]['Category'].tolist(), key="fixed_category")
+    fixed_amount = st.number_input("Amount", min_value=0.0, format="%.2f", key="fixed_amount")
+    fixed_description = st.text_input("Description", key="fixed_description")
+    start_date = st.date_input("Start Date", datetime.date.today(), key="start_date")
+    end_date = st.date_input("End Date (Optional)", key="end_date")
+    frequency = st.selectbox("Frequency", ["Daily", "Weekly", "Monthly", "Yearly"], key="frequency")
+
+    if st.button("Add Fixed Transaction", key="add_fixed"):
+        if fixed_amount == 0:
+            st.warning("Amount must be greater than 0.")
+        elif not fixed_category:
+            st.warning("Please select a category.")
+        else:
+            new_fixed_entry = pd.DataFrame({
+                'Type': [fixed_type],
+                'Amount': [fixed_amount],
+                'Description': [fixed_description],
+                'Category': [fixed_category],
+                'Start Date': [start_date],
+                'End Date': [end_date] if end_date else [None],
+                'Frequency': [frequency]
+            })
+            fixed_transactions = pd.concat([fixed_transactions, new_fixed_entry], ignore_index=True)
+            save_data(fixed_transactions, fixed_file)
+            st.success("Fixed transaction added successfully!")
+
+    if st.button("Delete Selected Fixed Transactions", key="delete_fixed"):
+        selected_fixed = st.multiselect("Select transactions to delete", fixed_transactions['Description'].tolist(), key="selected_fixed")
+        fixed_transactions.drop(fixed_transactions[fixed_transactions['Description'].isin(selected_fixed)].index, inplace=True)
+        save_data(fixed_transactions, fixed_file)
+        st.success("Selected transactions deleted successfully.")
+
+    st.write("### Current Fixed Transactions")
+    st.dataframe(fixed_transactions)
