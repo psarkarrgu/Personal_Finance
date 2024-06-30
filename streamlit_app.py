@@ -5,12 +5,6 @@ import os
 import random
 import string
 
-# Set the title and favicon that appear in the Browser's tab bar.
-st.set_page_config(
-    page_title='Personal Finance',
-    page_icon='🪙', # This is an emoji shortcode. Could be a URL too.
-)
-
 # File paths
 data_file = 'data/finance_data.csv'
 categories_file = 'data/categories.csv'
@@ -81,10 +75,17 @@ def reset_data():
 
         if user_input == confirmation_word:
             # Reset all data
-            df = pd.DataFrame(columns=['Type', 'Amount', 'Date', 'Description', 'Category', 'Fixed'])
-            save_data(df, data_file)
+            try:
+                os.remove(data_file)
+                st.write(f"{data_file} has been removed successfully.")
+            except FileNotFoundError:
+                st.sidebar.warning(f"{data_file} does not exist.")
+            except Exception as e:
+                st.sidebar.warning(f"An error occurred: {e}")
+            #df = pd.DataFrame(columns=['Type', 'Amount', 'Date', 'Description', 'Category', 'Fixed'])
+            #save_data(df, data_file)
             st.sidebar.success("Data reset successfully!")
-        elif user_input!= "":
+        else:
             st.sidebar.warning("Confirmation word incorrect. Data not reset.")
 
 # Call the function to add fixed transactions
